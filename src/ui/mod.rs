@@ -3,6 +3,8 @@
 
 mod eq;
 mod list;
+#[cfg(feature = "mpris")]
+mod mpris;
 mod panel;
 
 use std::cell::{Cell, RefCell};
@@ -21,7 +23,7 @@ use gtk::{gdk, gio, glib};
 use crate::audio::{Command, Event, Player};
 use crate::config::{self, Settings};
 use crate::library::{self, ScanEvent};
-use crate::playlist::{Order, Track, m3u};
+use crate::playlist::{Order, Repeat, Track, m3u};
 use crate::util::{AUDIO_EXTS, PLAYLIST_EXTS, fmt_time};
 use list::{List, track, wrap};
 use panel::Panel;
@@ -101,8 +103,22 @@ pub fn tr(s: &'static str) -> &'static str {
 enum Msg {
     Audio(Event),
     Scan(ScanEvent),
-    /// Decoded cover art for the track with this id.
-    Cover(u64, Option<gdk::Texture>),
+    /// Decoded cover art (and a file with it, for MPRIS) for a track id.
+    Cover(u64, Option<gdk::Texture>, Option<PathBuf>),
+}
+
+/// Tells D-Bus listeners (MPRIS) that player properties changed.
+fn notify(props: &[&str]) {
+    #[cfg(feature = "mpris")]
+    mpris::changed(props);
+    let _ = props;
+}
+
+fn notify_seeked(secs: f64) {
+    #[cfg(feature = "mpris")]
+    mpris::seeked(secs);
+    #[cfg(not(feature = "mpris"))]
+    let _ = secs;
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -139,6 +155,8 @@ struct App {
     total: Cell<f64>,
     last_dir: RefCell<Option<PathBuf>>,
     flash_until: Cell<Option<Instant>>,
+    /// Image file with the current cover (for `mpris:artUrl`).
+    art: RefCell<Option<PathBuf>>,
 }
 
 thread_local! {
@@ -338,10 +356,13 @@ fn window(app: &gtk::Application) -> gtk::ApplicationWindow {
         total: Cell::new(0.0),
         last_dir: RefCell::new(None),
         flash_until: Cell::new(None),
+        art: RefCell::new(None),
     });
     APP.set(Some(app_state.clone()));
     connect(&app_state);
     app_state.restore(config::load());
+    #[cfg(feature = "mpris")]
+    mpris::start();
     window
 }
 
@@ -354,12 +375,12 @@ fn connect(a: &App) {
     p.shuffle.connect_toggled(|b| {
         let on = b.is_active();
         with(|a| a.order.borrow_mut().set_shuffle(on));
+        notify(&["Shuffle"]);
     });
     p.repeat.connect_clicked(|_| {
         with(|a| {
             let r = a.order.borrow().repeat.cycle();
-            a.order.borrow_mut().repeat = r;
-            a.panel.set_repeat(r);
+            a.set_repeat(r);
         })
     });
     p.eq.connect_toggled(|b| {
@@ -382,6 +403,7 @@ fn connect(a: &App) {
             a.player.set_volume(v / 100.0);
             a.panel.set_volume_icon(v);
         });
+        notify(&["Volume"]);
     });
     p.seek.connect_change_value(|_, _, v| {
         with(|a| a.seek_to(v));
@@ -456,12 +478,23 @@ impl App {
                 let cur = self.current.borrow().as_ref().map(|o| (track(o).id, track(o).path.clone()));
                 if let Some((id, path)) = cur {
                     let tx = self.tx.clone();
-                    std::thread::spawn(move || post(&tx, Msg::Cover(id, panel::load_cover(cover, &path))));
+                    std::thread::spawn(move || {
+                        #[cfg(feature = "mpris")]
+                        let art = match &cover {
+                            Some(bytes) => mpris::write_art(id, bytes),
+                            None => panel::folder_cover(&path),
+                        };
+                        #[cfg(not(feature = "mpris"))]
+                        let art = None;
+                        post(&tx, Msg::Cover(id, panel::load_cover(cover, &path), art));
+                    });
                 }
             }
-            Msg::Cover(id, tex) => {
+            Msg::Cover(id, tex, art) => {
                 if self.current.borrow().as_ref().is_some_and(|o| track(o).id == id) {
                     self.panel.set_cover(tex);
+                    *self.art.borrow_mut() = art;
+                    notify(&["Metadata"]);
                 }
             }
             Msg::Audio(Event::Finished) => self.next(true),
@@ -544,6 +577,7 @@ impl App {
         drop(t);
         self.list.set_playing(Some(&obj));
         *self.current.borrow_mut() = Some(obj);
+        *self.art.borrow_mut() = None;
         self.set_duration(duration);
         self.panel.seek.set_value(start);
         self.panel.set_time(start, duration);
@@ -555,11 +589,19 @@ impl App {
         self.panel.seek.set_range(0.0, d.max(1.0));
         self.panel.seek.set_sensitive(d > 0.0);
         self.panel.set_time(self.player.position(), d);
+        notify(&["Metadata", "CanSeek"]);
+    }
+
+    fn set_repeat(&self, r: Repeat) {
+        self.order.borrow_mut().repeat = r;
+        self.panel.set_repeat(r);
+        notify(&["LoopStatus"]);
     }
 
     fn set_state(&self, s: State) {
         self.state.set(s);
         self.panel.set_playing(s == State::Playing);
+        notify(&["PlaybackStatus"]);
         if s == State::Playing && !self.ticking.replace(true) {
             glib::timeout_add_local(Duration::from_millis(200), || {
                 let mut more = false;
@@ -660,6 +702,7 @@ impl App {
         self.seek_hold.set(Some(Instant::now() + Duration::from_millis(400)));
         self.panel.seek.set_value(secs);
         self.panel.set_time(secs, self.duration.get());
+        notify_seeked(secs);
     }
 
     /// Scrolls the list so that `obj` is visible.

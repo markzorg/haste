@@ -213,6 +213,11 @@ pub fn load_cover(bytes: Option<Vec<u8>>, track_path: &std::path::Path) -> Optio
             return Some(t);
         }
     }
+    gdk::Texture::from_file(&gio::File::for_path(folder_cover(track_path)?)).ok()
+}
+
+/// Finds cover.jpg/folder.png/... next to a track.
+pub fn folder_cover(track_path: &std::path::Path) -> Option<std::path::PathBuf> {
     const NAMES: &[&str] = &["cover", "folder", "front", "albumart", "album"];
     let dir = track_path.parent()?;
     let mut best: Option<(usize, std::path::PathBuf)> = None;
@@ -229,5 +234,5 @@ pub fn load_cover(bytes: Option<Vec<u8>>, track_path: &std::path::Path) -> Optio
             }
         }
     }
-    gdk::Texture::from_file(&gio::File::for_path(best?.1)).ok()
+    best.map(|(_, p)| p)
 }
