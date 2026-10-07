@@ -6,6 +6,8 @@ mod list;
 #[cfg(feature = "mpris")]
 mod mpris;
 mod panel;
+#[cfg(feature = "tray")]
+mod tray;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
@@ -77,6 +79,9 @@ const RU: &[(&str, &str)] = &[
     ("Bass boost", "Больше баса"),
     ("Treble boost", "Больше верхов"),
     ("Vocal", "Вокал"),
+    ("Play", "Играть"),
+    ("Pause", "Пауза"),
+    ("Show/Hide window", "Показать/скрыть окно"),
 ];
 
 fn is_ru() -> bool {
@@ -107,10 +112,12 @@ enum Msg {
     Cover(u64, Option<gdk::Texture>, Option<PathBuf>),
 }
 
-/// Tells D-Bus listeners (MPRIS) that player properties changed.
+/// Tells D-Bus listeners (MPRIS, tray) that player properties changed.
 fn notify(props: &[&str]) {
     #[cfg(feature = "mpris")]
     mpris::changed(props);
+    #[cfg(feature = "tray")]
+    tray::changed(props);
     let _ = props;
 }
 
@@ -363,6 +370,8 @@ fn window(app: &gtk::Application) -> gtk::ApplicationWindow {
     app_state.restore(config::load());
     #[cfg(feature = "mpris")]
     mpris::start();
+    #[cfg(feature = "tray")]
+    tray::start();
     window
 }
 

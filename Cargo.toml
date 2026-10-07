@@ -18,6 +18,8 @@ cpal = { version = "0.18", default-features = false }
 [features]
 # MPRIS 2 over GDBus (libgio is already linked; no extra crates).
 mpris = []
+# Tray icon via StatusNotifierItem + dbusmenu over GDBus.
+tray = []
 
 [profile.release]
 opt-level = "z"
