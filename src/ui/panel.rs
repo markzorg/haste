@@ -20,6 +20,7 @@ pub struct Panel {
     pub next: gtk::Button,
     pub shuffle: gtk::ToggleButton,
     pub repeat: gtk::Button,
+    pub eq: gtk::ToggleButton,
     pub volume: gtk::Scale,
     pub volume_icon: gtk::Image,
 }
@@ -80,6 +81,9 @@ impl Panel {
         shuffle.set_tooltip_text(Some(tr("Shuffle")));
         shuffle.add_css_class("flat");
         let repeat = button("media-playlist-repeat-symbolic", "Repeat: off");
+        let eq = gtk::ToggleButton::with_label("EQ");
+        eq.set_tooltip_text(Some(tr("Equalizer")));
+        eq.add_css_class("flat");
         let volume_icon = gtk::Image::from_icon_name("audio-volume-high-symbolic");
         let volume = gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 100.0, 1.0);
         volume.set_draw_value(false);
@@ -93,6 +97,7 @@ impl Panel {
         controls.append(&gtk::Separator::new(gtk::Orientation::Vertical));
         controls.append(&shuffle);
         controls.append(&repeat);
+        controls.append(&eq);
         let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         spacer.set_hexpand(true);
         controls.append(&spacer);
@@ -126,6 +131,7 @@ impl Panel {
             next,
             shuffle,
             repeat,
+            eq,
             volume,
             volume_icon,
         };

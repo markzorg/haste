@@ -2,6 +2,7 @@
 //! drained by the cpal callback.
 
 mod decoder;
+pub mod eq;
 mod engine;
 mod output;
 mod resample;
@@ -40,6 +41,7 @@ pub struct Shared {
     volume: AtomicU32,
     paused: AtomicBool,
     failed: AtomicBool,
+    eq: eq::EqParams,
 }
 
 impl Shared {
@@ -83,6 +85,7 @@ impl Player {
             volume: AtomicU32::new(1.0f32.to_bits()),
             paused: AtomicBool::new(true),
             failed: AtomicBool::new(false),
+            eq: eq::EqParams::new(),
         });
         let timeline = Arc::new(Mutex::new(Timeline::default()));
         let (tx, rx) = mpsc::channel();
@@ -102,6 +105,11 @@ impl Player {
     pub fn set_volume(&self, v: f64) {
         let g = v.clamp(0.0, 1.0).powi(3) as f32;
         self.shared.volume.store(g.to_bits(), Relaxed);
+    }
+
+    /// Equalizer settings in dB (applied by the output callback).
+    pub fn set_eq(&self, enabled: bool, preamp: f32, gains: &[f32; 10]) {
+        self.shared.eq.set(enabled, preamp, gains);
     }
 
     /// Current playback position in seconds.

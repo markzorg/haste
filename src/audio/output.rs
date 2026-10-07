@@ -77,15 +77,20 @@ where
     let mut gain = 0.0f32;
     let mut buf = vec![0.0f32; CHUNK_FRAMES * 2];
     let failed = shared.clone();
+    let mut fx = super::eq::Processor::new(config.sample_rate as f32);
     let data_cb = move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
         let paused = shared.paused.load(Relaxed);
         let target = if paused { 0.0 } else { shared.volume() };
+        fx.sync(&shared.eq);
         for out in data.chunks_mut(CHUNK_FRAMES * out_ch) {
             let frames = out.len() / out_ch;
             let tmp = &mut buf[..frames * 2];
             // Once faded out while paused, stop consuming so nothing is lost.
             let got = if paused && gain == 0.0 { 0 } else { ring.pop(tmp) };
             tmp[got..].fill(0.0);
+            if got > 0 {
+                fx.process(tmp);
+            }
             for (frame, src) in out.chunks_exact_mut(out_ch).zip(tmp.chunks_exact(2)) {
                 if gain != target {
                     gain = if (target - gain).abs() <= step { target } else { gain + step.copysign(target - gain) };

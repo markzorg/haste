@@ -1,6 +1,7 @@
 //! GTK user interface. Everything here runs on the main thread; background
 //! threads talk to it through an mpsc channel plus `MainContext::invoke`.
 
+mod eq;
 mod list;
 mod panel;
 
@@ -61,6 +62,19 @@ const RU: &[(&str, &str)] = &[
     ("End of playlist", "Конец плейлиста"),
     ("Cannot save playlist", "Не удалось сохранить плейлист"),
     ("Menu", "Меню"),
+    ("Equalizer", "Эквалайзер"),
+    ("Enabled", "Включён"),
+    ("Preamp", "Предусил."),
+    ("Reset", "Сброс"),
+    ("Custom", "Свой"),
+    ("Flat", "Ровно"),
+    ("Rock", "Рок"),
+    ("Pop", "Поп"),
+    ("Jazz", "Джаз"),
+    ("Classical", "Классика"),
+    ("Bass boost", "Больше баса"),
+    ("Treble boost", "Больше верхов"),
+    ("Vocal", "Вокал"),
 ];
 
 fn is_ru() -> bool {
@@ -103,6 +117,7 @@ struct App {
     player: Player,
     list: List,
     panel: Panel,
+    eq: eq::EqView,
     search: gtk::SearchEntry,
     status: gtk::Label,
     rx: Receiver<Msg>,
@@ -297,11 +312,13 @@ fn window(app: &gtk::Application) -> gtk::ApplicationWindow {
 
     let window = gtk::ApplicationWindow::builder().application(app).title("haste").icon_name(APP_ID).child(&root).build();
 
+    let eq = eq::EqView::new(&window);
     let app_state = Rc::new(App {
         window: window.clone(),
         player,
         list,
         panel,
+        eq,
         search,
         status,
         rx,
@@ -343,6 +360,20 @@ fn connect(a: &App) {
             let r = a.order.borrow().repeat.cycle();
             a.order.borrow_mut().repeat = r;
             a.panel.set_repeat(r);
+        })
+    });
+    p.eq.connect_toggled(|b| {
+        let on = b.is_active();
+        with(|a| if on { a.eq.window.present() } else { a.eq.window.set_visible(false) });
+    });
+    a.eq.window.connect_close_request(|_| {
+        with(|a| a.panel.eq.set_active(false));
+        glib::Propagation::Proceed
+    });
+    a.eq.connect_changed(|| {
+        with(|a| {
+            let (on, pre, gains) = a.eq.values();
+            a.player.set_eq(on, pre, &gains);
         })
     });
     p.volume.connect_value_changed(|s| {
@@ -819,6 +850,8 @@ impl App {
             o.repeat = s.repeat;
         }
         self.panel.set_repeat(s.repeat);
+        self.eq.set_values(s.eq_enabled, s.eq_preamp, &s.eq_gains);
+        self.player.set_eq(s.eq_enabled, s.eq_preamp, &s.eq_gains);
         *self.last_dir.borrow_mut() = s.last_dir;
         self.total.set(tracks.iter().map(|t| t.duration).sum());
         let objs: Vec<glib::Object> = tracks.into_iter().map(wrap).collect();
@@ -842,6 +875,7 @@ impl App {
         let (width, height) = self.window.default_size();
         let current = self.current.borrow().as_ref().and_then(|o| List::position_in(&self.list.store, o));
         let position = if self.state.get() == State::Stopped { 0.0 } else { self.player.position() };
+        let (eq_enabled, eq_preamp, eq_gains) = self.eq.values();
         let settings = Settings {
             volume: self.panel.volume.value() / 100.0,
             shuffle: self.order.borrow().shuffle,
@@ -853,6 +887,9 @@ impl App {
             position,
             sort: self.list.sort_state(),
             last_dir: self.last_dir.borrow().clone(),
+            eq_enabled,
+            eq_preamp,
+            eq_gains,
         };
         let objs: Vec<glib::Object> = self.list.store.iter::<glib::Object>().flatten().collect();
         let tracks: Vec<_> = objs.iter().map(track).collect();

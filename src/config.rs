@@ -23,6 +23,9 @@ pub struct Settings {
     pub position: f64,
     pub sort: Option<(Column, bool)>,
     pub last_dir: Option<PathBuf>,
+    pub eq_enabled: bool,
+    pub eq_preamp: f32,
+    pub eq_gains: [f32; 10],
 }
 
 impl Default for Settings {
@@ -38,6 +41,9 @@ impl Default for Settings {
             position: 0.0,
             sort: None,
             last_dir: None,
+            eq_enabled: false,
+            eq_preamp: 0.0,
+            eq_gains: [0.0; 10],
         }
     }
 }
@@ -62,6 +68,13 @@ impl Settings {
                     s.sort = Column::from_name(col).map(|c| (c, dir == "desc"));
                 }
                 "last_dir" if !v.is_empty() => s.last_dir = Some(PathBuf::from(v)),
+                "eq_enabled" => s.eq_enabled = v == "true",
+                "eq_preamp" => s.eq_preamp = v.parse().unwrap_or(0.0),
+                "eq_bands" => {
+                    for (g, x) in s.eq_gains.iter_mut().zip(v.split(',')) {
+                        *g = x.trim().parse().unwrap_or(0.0);
+                    }
+                }
                 _ => {}
             }
         }
@@ -89,6 +102,10 @@ impl Settings {
         if let Some(d) = &self.last_dir {
             let _ = writeln!(o, "last_dir={}", d.display());
         }
+        let _ = writeln!(o, "eq_enabled={}", self.eq_enabled);
+        let _ = writeln!(o, "eq_preamp={}", self.eq_preamp);
+        let bands: Vec<String> = self.eq_gains.iter().map(|g| g.to_string()).collect();
+        let _ = writeln!(o, "eq_bands={}", bands.join(","));
         o
     }
 }
@@ -198,6 +215,9 @@ mod tests {
             position: 33.5,
             sort: Some((Column::Album, true)),
             last_dir: Some(PathBuf::from("/home/u/Music")),
+            eq_enabled: true,
+            eq_preamp: -3.0,
+            eq_gains: [5.0, 4.0, 3.0, 1.0, -1.0, -1.5, 1.0, 3.0, 4.0, 5.0],
         };
         assert_eq!(Settings::parse(&s.serialize()), s);
     }
