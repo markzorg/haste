@@ -1,6 +1,6 @@
 //! Tag reading and background scanning of files/folders/playlists.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::Relaxed};
@@ -48,17 +48,22 @@ pub fn read_track(path: PathBuf) -> Track {
 /// Expands files, folders (recursively, sorted) and playlists into audio paths.
 pub fn collect(inputs: Vec<PathBuf>, cancel: &AtomicBool) -> Vec<PathBuf> {
     let mut out = Vec::new();
+    let mut seen = HashSet::new();
     for p in inputs {
-        walk(&p, &mut out, cancel, 0);
+        walk(&p, &mut out, &mut seen, cancel, 0);
     }
     out
 }
 
-fn walk(path: &Path, out: &mut Vec<PathBuf>, cancel: &AtomicBool, depth: u32) {
+fn walk(path: &Path, out: &mut Vec<PathBuf>, seen: &mut HashSet<PathBuf>, cancel: &AtomicBool, depth: u32) {
     if cancel.load(Relaxed) || depth > 32 {
         return;
     }
     if path.is_dir() {
+        // Symlinked directories may form loops: visit each real directory once.
+        if !std::fs::canonicalize(path).is_ok_and(|real| seen.insert(real)) {
+            return;
+        }
         let Ok(rd) = std::fs::read_dir(path) else { return };
         let mut entries: Vec<PathBuf> = rd.filter_map(|e| e.ok().map(|e| e.path())).collect();
         entries.sort_by_cached_key(|p| p.file_name().map(|n| n.to_string_lossy().to_lowercase()));
@@ -66,7 +71,7 @@ fn walk(path: &Path, out: &mut Vec<PathBuf>, cancel: &AtomicBool, depth: u32) {
         let (dirs, files): (Vec<_>, Vec<_>) = entries.into_iter().partition(|p| p.is_dir());
         out.extend(files.into_iter().filter(|p| is_audio(p)));
         for d in dirs {
-            walk(&d, out, cancel, depth + 1);
+            walk(&d, out, seen, cancel, depth + 1);
         }
     } else if is_playlist(path) {
         if let Ok(bytes) = std::fs::read(path) {
@@ -139,4 +144,26 @@ pub fn scan(scan: u64, inputs: Vec<PathBuf>, cancel: Arc<AtomicBool>, notify: im
         }
         notify(ScanEvent::Done { scan });
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn collect_walks_folders_in_order_and_survives_symlink_loops() {
+        let root = std::env::temp_dir().join(format!("haste-walk-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("b sub")).unwrap();
+        for f in ["B.mp3", "a.flac", "cover.jpg", "b sub/c.ogg"] {
+            std::fs::write(root.join(f), b"").unwrap();
+        }
+        std::fs::write(root.join("list.m3u"), "#EXTM3U\nx.wav\nhttp://radio/stream\n").unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&root, root.join("b sub/loop")).unwrap();
+        let got = collect(vec![root.clone(), root.join("list.m3u")], &AtomicBool::new(false));
+        let names: Vec<_> = got.iter().map(|p| p.strip_prefix(&root).unwrap().to_string_lossy().into_owned()).collect();
+        assert_eq!(names, ["a.flac", "B.mp3", "b sub/c.ogg", "x.wav"]);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
 }

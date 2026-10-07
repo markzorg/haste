@@ -606,7 +606,7 @@ impl App {
     }
 
     fn prev(&self) {
-        if self.state.get() != State::Stopped && self.player.position() > 3.0 {
+        if self.state.get() != State::Stopped && self.duration.get() > 0.0 && self.player.position() > 3.0 {
             self.seek_to(0.0);
             return;
         }
