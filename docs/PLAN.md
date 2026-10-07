@@ -8,7 +8,7 @@
 
 | Крейт | Зачем | Фичи |
 |---|---|---|
-| `gtk4` 0.11 | GUI, динамически линкуется с системным libgtk-4 | `default-features = false`, `v4_12` (FileDialog, ColumnView::scroll_to) |
+| `gtk4` 0.10 | GUI, динамически линкуется с системным libgtk-4 (0.10, а не 0.11 — собирается Rust 1.85 из Trixie) | `default-features = false`, `v4_12` (FileDialog, ColumnView::scroll_to) |
 | `symphonia` 0.6 | декодирование + теги + обложки | `mp3 flac ogg vorbis wav pcm aac isomp4 id3v1 id3v2` |
 | `cpal` 0.18 | вывод звука через ALSA (на Trixie → PipeWire/Pulse через alsa-plugins) | `default-features = false` |
 
@@ -88,6 +88,8 @@ ColumnView) → `FilterListModel` (incremental, `CustomFilter` по
 6. Горячие клавиши, медиаклавиши.
 7. Сессия.
 8. .desktop, иконка, MIME, .deb.
-9. Этап 2 (отдельные коммиты): EQ; `mpris` (feature, zbus); `tray` (feature, SNI).
+9. Этап 2 (отдельные коммиты): EQ; `mpris` (feature); `tray` (feature, SNI).
+   MPRIS и трей сделаны на GDBus из libgio (она уже линкуется ради GTK)
+   вместо zbus: без новых крейтов и async-рантайма, ~30–40 КБ на фичу.
 
 После каждого пункта: `cargo clippy`, `cargo build --release`, замер размера.
