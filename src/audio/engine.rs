@@ -119,7 +119,7 @@ impl Engine {
             Ok(d) => d,
             Err(e) => {
                 self.stop();
-                (self.notify)(Event::Error(format!("{}: {e}", path.display())));
+                (self.notify)(Event::LoadFailed(format!("{}: {e}", path.display())));
                 return;
             }
         };
@@ -129,7 +129,7 @@ impl Engine {
                 Ok(o) => self.out = Some(o),
                 Err(e) => {
                     self.stop();
-                    (self.notify)(Event::Error(e));
+                    (self.notify)(Event::LoadFailed(e));
                     return;
                 }
             }
@@ -159,7 +159,14 @@ impl Engine {
         let Some(dec) = &mut self.dec else { return };
         match dec.seek(secs) {
             Ok(actual) => self.restart_at(actual),
-            Err(e) => (self.notify)(Event::Error(format!("seek: {e}"))),
+            Err(_) => {
+                // Past the end (durations in headers can be off): finish the
+                // track as if it had played out.
+                self.restart_at(secs);
+                if let Some(out) = &self.out {
+                    self.eof_idx = Some(out.producer.write_index());
+                }
+            }
         }
     }
 

@@ -50,8 +50,23 @@ pub fn duration_of(format: &dyn FormatReader) -> Option<f64> {
     tb.calc_duration(info.duration?).map(|t| t.as_secs_f64())
 }
 
+/// Visits every queued metadata revision, newest first.
+pub fn for_each_revision(format: &mut dyn FormatReader, f: &mut dyn FnMut(&MetadataRevision)) {
+    let mut md = format.metadata();
+    let mut older = Vec::new();
+    while let Some(rev) = md.pop() {
+        older.push(rev);
+    }
+    if let Some(cur) = md.current() {
+        f(cur);
+    }
+    for rev in older.iter().rev() {
+        f(rev);
+    }
+}
+
 /// Picks the front cover (or any picture) from a metadata revision.
-pub fn cover_of(rev: &MetadataRevision) -> Option<&[u8]> {
+fn cover_of(rev: &MetadataRevision) -> Option<&[u8]> {
     let visuals = rev.media.visuals.iter().chain(rev.per_track.iter().flat_map(|t| &t.metadata.visuals));
     let mut best: Option<&[u8]> = None;
     for v in visuals {
@@ -67,7 +82,12 @@ impl Decoder {
     /// Opens a file for playback. Also returns embedded cover art, if any.
     pub fn open(path: &Path) -> Result<(Decoder, Option<Vec<u8>>), Error> {
         let mut format = probe(path, MetadataOptions::default())?;
-        let cover = format.metadata().current().and_then(cover_of).map(<[u8]>::to_vec);
+        let mut cover = None;
+        for_each_revision(format.as_mut(), &mut |rev| {
+            if cover.is_none() {
+                cover = cover_of(rev).map(<[u8]>::to_vec);
+            }
+        });
         let duration = duration_of(format.as_ref());
         let track = format.default_track(TrackType::Audio).ok_or(Error::Unsupported("no audio track"))?;
         let params = track

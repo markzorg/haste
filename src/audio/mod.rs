@@ -7,8 +7,7 @@ mod output;
 mod resample;
 mod ring;
 
-#[allow(unused_imports)]
-pub use decoder::{cover_of, duration_of, probe};
+pub use decoder::{duration_of, for_each_revision, probe};
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering::Relaxed};
@@ -30,6 +29,9 @@ pub enum Event {
     Loaded { duration: Option<f64>, cover: Option<Vec<u8>> },
     /// The current track has been played to the very end.
     Finished,
+    /// The track could not be opened (playback stopped).
+    LoadFailed(String),
+    /// Non-fatal problem worth showing to the user.
     Error(String),
 }
 
