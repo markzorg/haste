@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.markzorg.Haste</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>haste</name>
+  <summary>Lightweight music player</summary>
+  <summary xml:lang="ru">Лёгкий музыкальный плеер</summary>
+  <description>
+    <p>A small native GTK4 audio player with a playlist, tags, cover art,
+    shuffle/repeat, M3U import/export and session restore.</p>
+  </description>
+  <launchable type="desktop-id">io.github.markzorg.Haste.desktop</launchable>
+  <url type="homepage">https://github.com/markzorg/haste</url>
+  <content_rating type="oars-1.1"/>
+  <provides>
+    <binary>haste</binary>
+  </provides>
+</component>
