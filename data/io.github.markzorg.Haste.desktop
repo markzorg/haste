@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=haste
+GenericName=Audio Player
+GenericName[ru]=Аудиоплеер
+Comment=Lightweight music player
+Comment[ru]=Лёгкий музыкальный плеер
+Exec=haste %U
+Icon=io.github.markzorg.Haste
+Terminal=false
+StartupNotify=true
+SingleMainWindow=true
+Categories=AudioVideo;Audio;Player;GTK;
+Keywords=music;audio;player;playlist;mp3;flac;ogg;
+Keywords[ru]=музыка;аудио;плеер;плейлист;
+MimeType=audio/mpeg;audio/mp3;audio/x-mp3;audio/flac;audio/x-flac;audio/ogg;audio/x-ogg;audio/vorbis;audio/x-vorbis;audio/x-vorbis+ogg;audio/wav;audio/x-wav;audio/vnd.wave;audio/aac;audio/x-aac;audio/mp4;audio/m4a;audio/x-m4a;audio/x-m4b;audio/x-mpegurl;audio/mpegurl;

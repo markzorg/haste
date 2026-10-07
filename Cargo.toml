@@ -1,0 +1,29 @@
+[package]
+name = "haste"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT"
+description = "Lightweight native GTK4 audio player"
+repository = "https://github.com/markzorg/haste"
+readme = "README.md"
+
+[dependencies]
+gtk = { package = "gtk4", version = "0.10", default-features = false, features = ["v4_12"] }
+symphonia = { version = "0.6", default-features = false, features = [
+    "mp3", "flac", "ogg", "vorbis", "wav", "pcm", "aac", "isomp4", "id3v1", "id3v2",
+] }
+cpal = { version = "0.18", default-features = false }
+
+[features]
+# MPRIS 2 over GDBus (libgio is already linked; no extra crates).
+mpris = []
+# Tray icon via StatusNotifierItem + dbusmenu over GDBus.
+tray = []
+
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
