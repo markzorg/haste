@@ -477,7 +477,10 @@ fn connect(a: &App) {
 impl App {
     fn handle(&self, msg: Msg) {
         match msg {
-            Msg::Audio(Event::Loaded { duration, cover }) => {
+            Msg::Audio(Event::Loaded { path, .. } | Event::Finished(path)) if !self.is_current(&path) => {
+                // Stale event from a track the user already switched away from.
+            }
+            Msg::Audio(Event::Loaded { duration, cover, .. }) => {
                 self.failures.set(0);
                 if let Some(d) = duration.filter(|d| *d > 0.0) {
                     self.set_duration(d);
@@ -506,7 +509,7 @@ impl App {
                     notify(&["Metadata"]);
                 }
             }
-            Msg::Audio(Event::Finished) => self.next(true),
+            Msg::Audio(Event::Finished(_)) => self.next(true),
             Msg::Audio(Event::LoadFailed(e)) => {
                 self.flash(&e);
                 let n = self.failures.get() + 1;
@@ -661,6 +664,10 @@ impl App {
         self.set_state(State::Stopped);
         self.panel.seek.set_value(0.0);
         self.panel.set_time(0.0, self.duration.get());
+    }
+
+    fn is_current(&self, path: &std::path::Path) -> bool {
+        self.current.borrow().as_ref().is_some_and(|o| track(o).path == path)
     }
 
     fn current_pos(&self) -> Option<usize> {

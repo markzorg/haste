@@ -27,9 +27,9 @@ pub enum Command {
 
 pub enum Event {
     /// A track was opened; carries its duration and embedded cover art.
-    Loaded { duration: Option<f64>, cover: Option<Vec<u8>> },
-    /// The current track has been played to the very end.
-    Finished,
+    Loaded { path: PathBuf, duration: Option<f64>, cover: Option<Vec<u8>> },
+    /// The track at `path` has been played to the very end.
+    Finished(PathBuf),
     /// The track could not be opened (playback stopped).
     LoadFailed(String),
     /// Non-fatal problem worth showing to the user.

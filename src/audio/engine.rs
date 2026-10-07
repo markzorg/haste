@@ -138,7 +138,7 @@ impl Engine {
         let duration = dec.duration;
         self.dec = Some(dec);
         self.restart_at(start);
-        (self.notify)(Event::Loaded { duration, cover });
+        (self.notify)(Event::Loaded { path: path.to_path_buf(), duration, cover });
         if play { self.resume() } else { self.pause() }
     }
 
@@ -213,7 +213,15 @@ impl Engine {
             // Device vanished or the server restarted: reopen and continue.
             let pos = self.timeline.lock().map_or(0.0, |t| t.position());
             let rate = self.dec.as_ref().map_or(48_000, |d| d.rate);
-            self.out = Output::open(rate, self.shared.clone()).ok();
+            self.out = None;
+            match Output::open(rate, self.shared.clone()) {
+                Ok(o) => self.out = Some(o),
+                Err(e) => {
+                    self.stop();
+                    (self.notify)(Event::LoadFailed(e));
+                    return;
+                }
+            }
             if let Some(dec) = &mut self.dec {
                 let pos = dec.seek(pos).unwrap_or(pos);
                 self.restart_at(pos);
@@ -225,9 +233,9 @@ impl Engine {
         if let (Some(end), Some(out)) = (self.eof_idx, &self.out) {
             if out.producer.read_index().wrapping_sub(end) as isize >= 0 {
                 self.eof_idx = None;
-                self.dec = None;
+                let path = self.dec.take().map(|d| d.path).unwrap_or_default();
                 self.pause();
-                (self.notify)(Event::Finished);
+                (self.notify)(Event::Finished(path));
             }
         }
     }

@@ -2,7 +2,7 @@
 //! interleaved stereo `f32` and performs sample-accurate seeks.
 
 use std::fs::File;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use symphonia::core::codecs::audio::{AudioDecoder, AudioDecoderOptions};
 use symphonia::core::errors::Error;
@@ -19,6 +19,7 @@ pub struct Decoder {
     time_base: Option<TimeBase>,
     pub rate: u32,
     pub duration: Option<f64>,
+    pub path: PathBuf,
     /// Frames still to drop after an accurate seek landed early.
     skip: u64,
     scratch: Vec<f32>,
@@ -99,7 +100,8 @@ impl Decoder {
         let track_id = track.id;
         let time_base = track.time_base;
         let decoder = symphonia::default::get_codecs().make_audio_decoder(params, &AudioDecoderOptions::default())?;
-        let dec = Decoder { format, decoder, track_id, time_base, rate, duration, skip: 0, scratch: Vec::new() };
+        let path = path.to_path_buf();
+        let dec = Decoder { format, decoder, track_id, time_base, rate, duration, path, skip: 0, scratch: Vec::new() };
         Ok((dec, cover))
     }
 
@@ -159,5 +161,23 @@ impl Decoder {
             self.skip = ((required - actual) * self.rate as f64).round() as u64;
         }
         Ok(required)
+    }
+}
+
+/// Diagnostic for a real file:
+/// `HASTE_DECODE_FILE=song.m4a cargo test decode_env_file -- --ignored --nocapture`
+#[cfg(test)]
+mod probe_file {
+    #[test]
+    #[ignore]
+    fn decode_env_file() {
+        let path = std::env::var("HASTE_DECODE_FILE").unwrap();
+        let (mut d, _) = super::Decoder::open(std::path::Path::new(&path)).unwrap();
+        let mut out = Vec::new();
+        while d.decode_into(&mut out).unwrap() {}
+        let frames = out.len() / 2;
+        let lead = out.chunks(2).take_while(|f| f[0].abs() < 1e-3).count();
+        let trail = out.chunks(2).rev().take_while(|f| f[0].abs() < 1e-3).count();
+        println!("rate {} frames {} ({:.3}s) lead-silence {} trail-silence {} duration {:?}", d.rate, frames, frames as f64 / d.rate as f64, lead, trail, d.duration);
     }
 }
